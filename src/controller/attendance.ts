@@ -385,4 +385,222 @@ export const getStudentAttendanceHistory = async (req: any, res: any) => {
   }
 };
 
+// =====================================================
+// 7. Thống kê điểm danh theo lớp (Giảng viên)
+// =====================================================
+export const getClassAttendanceStats = async (req: any, res: any) => {
+  try {
+    const { classId } = req.params;
+    const ClassModel = require("../models/ClassModel").default;
+
+    // Lấy thông tin lớp và danh sách sinh viên
+    const classData = await ClassModel.findById(classId)
+      .populate("students", "name email")
+      .lean();
+
+    if (!classData) {
+      return res.status(404).json({
+        message: "Không tìm thấy lớp học.",
+      });
+    }
+
+    // Lấy tất cả buổi học của lớp
+    const sessions = await SessionModel.find({ courseId: classId }).lean();
+    const totalSessions = sessions.length;
+    const sessionIds = sessions.map((s: any) => s._id);
+
+    // Lấy tất cả điểm danh của các buổi học trong lớp
+    const allAttendances = await AttendanceModel.find({
+      sessionId: { $in: sessionIds },
+    }).lean();
+
+    // Tính toán thống kê cho từng sinh viên
+    const studentsStats = (classData.students || []).map((student: any) => {
+      const studentAttendances = allAttendances.filter(
+        (att: any) => att.studentId.toString() === student._id.toString()
+      );
+
+      const presentCount = studentAttendances.filter(
+        (att: any) => att.status === "present"
+      ).length;
+      const lateCount = studentAttendances.filter(
+        (att: any) => att.status === "late"
+      ).length;
+      const absentCount = totalSessions - studentAttendances.length;
+
+      return {
+        _id: student._id,
+        name: student.name,
+        email: student.email,
+        totalSessions,
+        presentCount,
+        lateCount,
+        absentCount,
+        attendanceRate:
+          totalSessions > 0
+            ? Math.round(((presentCount + lateCount) / totalSessions) * 100)
+            : 0,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Lấy thống kê điểm danh thành công.",
+      data: {
+        className: classData.name,
+        classCode: classData.code,
+        totalSessions,
+        totalStudents: classData.students?.length || 0,
+        students: studentsStats,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy thống kê điểm danh.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 8. Lấy danh sách SV với trạng thái điểm danh theo buổi (Giảng viên)
+// =====================================================
+export const getSessionAttendanceWithStudents = async (req: any, res: any) => {
+  try {
+    const { sessionId } = req.params;
+    const ClassModel = require("../models/ClassModel").default;
+
+    // Lấy thông tin buổi học
+    const session = await SessionModel.findById(sessionId).lean();
+    if (!session) {
+      return res.status(404).json({
+        message: "Không tìm thấy buổi học.",
+      });
+    }
+
+    // Lấy thông tin lớp và danh sách sinh viên
+    const classData = await ClassModel.findById(session.courseId)
+      .populate("students", "name email")
+      .lean();
+
+    if (!classData) {
+      return res.status(404).json({
+        message: "Không tìm thấy lớp học.",
+      });
+    }
+
+    // Lấy danh sách điểm danh của buổi này
+    const attendances = await AttendanceModel.find({ sessionId }).lean();
+
+    // Kết hợp danh sách sinh viên với trạng thái điểm danh
+    const studentsWithStatus = (classData.students || []).map((student: any) => {
+      const attendance = attendances.find(
+        (att: any) => att.studentId.toString() === student._id.toString()
+      );
+
+      return {
+        _id: student._id,
+        name: student.name,
+        email: student.email,
+        attendanceId: attendance?._id || null,
+        status: attendance?.status || "absent", // absent = chưa điểm danh
+        checkInTime: attendance?.checkInTime || null,
+        location: attendance?.location || null,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Lấy danh sách điểm danh thành công.",
+      data: {
+        session: {
+          _id: session._id,
+          title: session.title,
+          startTime: session.startTime,
+          endTime: session.endTime,
+          status: session.status,
+        },
+        students: studentsWithStatus,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách điểm danh.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 9. Điểm danh thủ công cho sinh viên (Giảng viên)
+// =====================================================
+export const manualCheckIn = async (req: any, res: any) => {
+  try {
+    const { sessionId, studentId, status } = req.body;
+
+    if (!sessionId || !studentId || !status) {
+      return res.status(400).json({
+        message: "Thiếu thông tin: sessionId, studentId, status.",
+      });
+    }
+
+    if (!["present", "late", "absent"].includes(status)) {
+      return res.status(400).json({
+        message: "Trạng thái không hợp lệ. Chỉ chấp nhận: present, late, absent.",
+      });
+    }
+
+    const session = await SessionModel.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({
+        message: "Không tìm thấy buổi học.",
+      });
+    }
+
+    // Kiểm tra xem đã có bản ghi điểm danh chưa
+    let attendance = await AttendanceModel.findOne({ sessionId, studentId });
+
+    if (status === "absent") {
+      // Nếu đánh vắng thì xóa bản ghi điểm danh (nếu có)
+      if (attendance) {
+        await AttendanceModel.deleteOne({ _id: attendance._id });
+      }
+      return res.status(200).json({
+        message: "Đã đánh vắng sinh viên.",
+        data: null,
+      });
+    }
+
+    if (attendance) {
+      // Cập nhật trạng thái
+      attendance.status = status;
+      attendance.updatedAt = new Date();
+      await attendance.save();
+    } else {
+      // Tạo bản ghi mới
+      attendance = new AttendanceModel({
+        sessionId,
+        studentId,
+        checkInTime: new Date(),
+        status,
+        location: {
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          distanceToClass: 0,
+        },
+      });
+      await attendance.save();
+    }
+
+    return res.status(200).json({
+      message: `Điểm danh ${status === "present" ? "có mặt" : "muộn"} thành công.`,
+      data: attendance,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi điểm danh thủ công.",
+      error: error.message,
+    });
+  }
+};
+
 

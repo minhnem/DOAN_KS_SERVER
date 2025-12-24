@@ -7,6 +7,9 @@ import {
   getSessionsByClass,
   getAttendanceBySession,
   getStudentAttendanceHistory,
+  getClassAttendanceStats,
+  getSessionAttendanceWithStudents,
+  manualCheckIn,
 } from "../controller/attendance";
 
 const router = Router();
@@ -21,8 +24,17 @@ router.post("/sessions/:id/qr", verifyToken, generateQrForSession);
 // Lấy danh sách buổi điểm danh theo lớp
 router.get("/class/:classId/sessions", verifyToken, getSessionsByClass);
 
-// Lấy danh sách điểm danh theo buổi
+// Lấy danh sách điểm danh theo buổi (cũ - chỉ SV đã điểm danh)
 router.get("/sessions/:sessionId/attendances", verifyToken, getAttendanceBySession);
+
+// Lấy danh sách tất cả SV với trạng thái điểm danh theo buổi
+router.get("/sessions/:sessionId/students", verifyToken, getSessionAttendanceWithStudents);
+
+// Thống kê điểm danh theo lớp
+router.get("/class/:classId/stats", verifyToken, getClassAttendanceStats);
+
+// Điểm danh thủ công cho sinh viên
+router.post("/manual-check-in", verifyToken, manualCheckIn);
 
 // ============ SINH VIÊN ============
 // Sinh viên quét QR + gửi GPS để điểm danh
