@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import userRouter from "./src/router/user";
 import attendanceRouter from "./src/router/attendance";
+import classRouter from "./src/router/class";
 import cors from "cors";
 
 dotenv.config();
@@ -19,6 +20,9 @@ app.use("/auth", userRouter);
 
 // API điểm danh bằng QR + GPS
 app.use("/attendance", attendanceRouter);
+
+// API quản lý lớp học
+app.use("/class", classRouter);
 
 const connectDB = async () => {
   try {

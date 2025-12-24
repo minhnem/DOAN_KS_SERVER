@@ -287,4 +287,102 @@ export const checkInAttendance = async (req: any, res: any) => {
   }
 };
 
+// =====================================================
+// 4. Lấy danh sách buổi điểm danh theo lớp (Giảng viên)
+// =====================================================
+export const getSessionsByClass = async (req: any, res: any) => {
+  try {
+    const { classId } = req.params;
+
+    const sessions = await SessionModel.find({ courseId: classId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      message: "Lấy danh sách buổi điểm danh thành công.",
+      data: sessions,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách buổi điểm danh.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 5. Lấy danh sách điểm danh theo buổi (Giảng viên)
+// =====================================================
+export const getAttendanceBySession = async (req: any, res: any) => {
+  try {
+    const { sessionId } = req.params;
+
+    const attendances = await AttendanceModel.find({ sessionId })
+      .populate("studentId", "name email")
+      .sort({ checkInTime: -1 })
+      .lean();
+
+    // Format lại dữ liệu
+    const formattedData = attendances.map((att: any) => ({
+      _id: att._id,
+      studentName: att.studentId?.name || "Chưa xác định",
+      studentEmail: att.studentId?.email,
+      status: att.status,
+      checkInTime: att.checkInTime,
+      location: att.location,
+    }));
+
+    return res.status(200).json({
+      message: "Lấy danh sách điểm danh thành công.",
+      data: formattedData,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách điểm danh.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 6. Lấy lịch sử điểm danh của sinh viên
+// =====================================================
+export const getStudentAttendanceHistory = async (req: any, res: any) => {
+  try {
+    const user = req.user;
+
+    if (!user || !user._id) {
+      return res.status(401).json({
+        message: "Không xác định được người dùng.",
+      });
+    }
+
+    const attendances = await AttendanceModel.find({ studentId: user._id })
+      .populate("sessionId", "title startTime endTime")
+      .sort({ checkInTime: -1 })
+      .lean();
+
+    // Format lại dữ liệu
+    const formattedData = attendances.map((att: any) => ({
+      _id: att._id,
+      sessionTitle: att.sessionId?.title || "Buổi học",
+      sessionStartTime: att.sessionId?.startTime,
+      sessionEndTime: att.sessionId?.endTime,
+      status: att.status,
+      checkInTime: att.checkInTime,
+      location: att.location,
+    }));
+
+    return res.status(200).json({
+      message: "Lấy lịch sử điểm danh thành công.",
+      data: formattedData,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy lịch sử điểm danh.",
+      error: error.message,
+    });
+  }
+};
+
 
