@@ -10,6 +10,9 @@ import {
   getClassAttendanceStats,
   getSessionAttendanceWithStudents,
   manualCheckIn,
+  updateSession,
+  deleteSession,
+  getSessionDetail,
 } from "../controller/attendance";
 
 const router = Router();
@@ -35,6 +38,15 @@ router.get("/class/:classId/stats", verifyToken, getClassAttendanceStats);
 
 // Điểm danh thủ công cho sinh viên
 router.post("/manual-check-in", verifyToken, manualCheckIn);
+
+// Lấy chi tiết buổi học
+router.get("/sessions/:id", verifyToken, getSessionDetail);
+
+// Cập nhật buổi học
+router.put("/sessions/:id", verifyToken, updateSession);
+
+// Xóa buổi học
+router.delete("/sessions/:id", verifyToken, deleteSession);
 
 // ============ SINH VIÊN ============
 // Sinh viên quét QR + gửi GPS để điểm danh

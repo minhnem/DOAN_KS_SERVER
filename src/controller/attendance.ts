@@ -603,4 +603,121 @@ export const manualCheckIn = async (req: any, res: any) => {
   }
 };
 
+// =====================================================
+// 10. Cập nhật buổi học (Giảng viên)
+// =====================================================
+export const updateSession = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const {
+      title,
+      startTime,
+      endTime,
+      attendanceWindowStart,
+      attendanceWindowEnd,
+      latitude,
+      longitude,
+      radius,
+      status,
+    } = req.body;
+
+    const session = await SessionModel.findById(id);
+
+    if (!session) {
+      return res.status(404).json({
+        message: "Không tìm thấy buổi học.",
+      });
+    }
+
+    // Cập nhật các trường
+    if (title !== undefined) session.title = title;
+    if (startTime !== undefined) session.startTime = new Date(startTime);
+    if (endTime !== undefined) session.endTime = new Date(endTime);
+    if (attendanceWindowStart !== undefined)
+      session.attendanceWindowStart = new Date(attendanceWindowStart);
+    if (attendanceWindowEnd !== undefined)
+      session.attendanceWindowEnd = new Date(attendanceWindowEnd);
+    if (latitude !== undefined && session.geoLocation)
+      (session.geoLocation as any).latitude = latitude;
+    if (longitude !== undefined && session.geoLocation)
+      (session.geoLocation as any).longitude = longitude;
+    if (radius !== undefined && session.geoLocation)
+      (session.geoLocation as any).radius = radius;
+    if (status !== undefined && ["scheduled", "ongoing", "closed"].includes(status))
+      session.status = status;
+
+    session.updatedAt = new Date();
+    await session.save();
+
+    return res.status(200).json({
+      message: "Cập nhật buổi học thành công.",
+      data: session,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi cập nhật buổi học.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 11. Xóa buổi học (Giảng viên)
+// =====================================================
+export const deleteSession = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    const session = await SessionModel.findById(id);
+
+    if (!session) {
+      return res.status(404).json({
+        message: "Không tìm thấy buổi học.",
+      });
+    }
+
+    // Xóa tất cả điểm danh của buổi học
+    await AttendanceModel.deleteMany({ sessionId: id });
+
+    // Xóa buổi học
+    await SessionModel.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      message: "Xóa buổi học thành công.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi xóa buổi học.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 12. Lấy chi tiết buổi học
+// =====================================================
+export const getSessionDetail = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+
+    const session = await SessionModel.findById(id).lean();
+
+    if (!session) {
+      return res.status(404).json({
+        message: "Không tìm thấy buổi học.",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Lấy thông tin buổi học thành công.",
+      data: session,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy thông tin buổi học.",
+      error: error.message,
+    });
+  }
+};
+
 

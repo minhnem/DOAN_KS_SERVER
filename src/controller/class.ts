@@ -341,3 +341,208 @@ export const closeClass = async (req: any, res: any) => {
   }
 };
 
+// =====================================================
+// 8. Cập nhật thông tin lớp học (Giảng viên)
+// =====================================================
+export const updateClass = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { name, description, maxStudents, status } = req.body;
+    const user = req.user;
+
+    if (!user || !user._id) {
+      return res.status(401).json({
+        message: "Không xác định được người dùng.",
+      });
+    }
+
+    const classData = await ClassModel.findById(id);
+
+    if (!classData) {
+      return res.status(404).json({
+        message: "Không tìm thấy lớp học.",
+      });
+    }
+
+    if (classData.teacherId.toString() !== user._id.toString()) {
+      return res.status(403).json({
+        message: "Bạn không có quyền chỉnh sửa lớp học này.",
+      });
+    }
+
+    // Cập nhật các trường
+    if (name !== undefined) classData.name = name.trim();
+    if (description !== undefined) classData.description = description.trim();
+    if (maxStudents !== undefined) classData.maxStudents = maxStudents;
+    if (status !== undefined && ["active", "closed", "archived"].includes(status)) {
+      classData.status = status;
+    }
+    classData.updatedAt = new Date();
+
+    await classData.save();
+
+    return res.status(200).json({
+      message: "Cập nhật lớp học thành công.",
+      data: classData,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi cập nhật lớp học.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 9. Xóa lớp học vĩnh viễn (Giảng viên)
+// =====================================================
+export const deleteClass = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    if (!user || !user._id) {
+      return res.status(401).json({
+        message: "Không xác định được người dùng.",
+      });
+    }
+
+    const classData = await ClassModel.findById(id);
+
+    if (!classData) {
+      return res.status(404).json({
+        message: "Không tìm thấy lớp học.",
+      });
+    }
+
+    if (classData.teacherId.toString() !== user._id.toString()) {
+      return res.status(403).json({
+        message: "Bạn không có quyền xóa lớp học này.",
+      });
+    }
+
+    // Xóa lớp học
+    await ClassModel.findByIdAndDelete(id);
+
+    // Xóa các buổi học liên quan
+    const SessionModel = require("../models/SessionModel").default;
+    const AttendanceModel = require("../models/AttendanceModel").default;
+    
+    const sessions = await SessionModel.find({ courseId: id });
+    const sessionIds = sessions.map((s: any) => s._id);
+    
+    // Xóa điểm danh của các buổi học
+    await AttendanceModel.deleteMany({ sessionId: { $in: sessionIds } });
+    
+    // Xóa các buổi học
+    await SessionModel.deleteMany({ courseId: id });
+
+    return res.status(200).json({
+      message: "Xóa lớp học thành công.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi xóa lớp học.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 10. Xóa sinh viên khỏi lớp (Giảng viên)
+// =====================================================
+export const removeStudentFromClass = async (req: any, res: any) => {
+  try {
+    const { id, studentId } = req.params;
+    const user = req.user;
+
+    if (!user || !user._id) {
+      return res.status(401).json({
+        message: "Không xác định được người dùng.",
+      });
+    }
+
+    const classData = await ClassModel.findById(id);
+
+    if (!classData) {
+      return res.status(404).json({
+        message: "Không tìm thấy lớp học.",
+      });
+    }
+
+    if (classData.teacherId.toString() !== user._id.toString()) {
+      return res.status(403).json({
+        message: "Bạn không có quyền xóa sinh viên khỏi lớp này.",
+      });
+    }
+
+    // Xóa sinh viên khỏi danh sách
+    classData.students = classData.students.filter(
+      (sid: any) => sid.toString() !== studentId
+    );
+    classData.updatedAt = new Date();
+    await classData.save();
+
+    return res.status(200).json({
+      message: "Xóa sinh viên khỏi lớp thành công.",
+      data: classData,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi xóa sinh viên.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 11. Sinh viên thoát khỏi lớp học
+// =====================================================
+export const leaveClass = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    if (!user || !user._id) {
+      return res.status(401).json({
+        message: "Không xác định được người dùng.",
+      });
+    }
+
+    const classData = await ClassModel.findById(id);
+
+    if (!classData) {
+      return res.status(404).json({
+        message: "Không tìm thấy lớp học.",
+      });
+    }
+
+    // Kiểm tra xem sinh viên có trong lớp không
+    const isInClass = classData.students.some(
+      (studentId: any) => studentId.toString() === user._id.toString()
+    );
+
+    if (!isInClass) {
+      return res.status(400).json({
+        message: "Bạn không phải thành viên của lớp học này.",
+      });
+    }
+
+    // Xóa sinh viên khỏi danh sách
+    classData.students = classData.students.filter(
+      (sid: any) => sid.toString() !== user._id.toString()
+    );
+    classData.updatedAt = new Date();
+    await classData.save();
+
+    return res.status(200).json({
+      message: "Đã thoát khỏi lớp học thành công.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi thoát lớp học.",
+      error: error.message,
+    });
+  }
+};
+
