@@ -1,9 +1,138 @@
 import UserModel from "../models/UserModel";
+import VerificationCodeModel from "../models/VerificationCodeModel";
 import bcrypt from "bcrypt"
 import dotevn from "dotenv"
 import { getAccesstoken } from "../utils/getAccesstoken";
 import { generatorRandomText } from "../utils/generatorRandomText";
+import { handleSendEmail } from "../utils/handleSendEmail";
 dotevn.config()
+
+// Sinh mã xác minh 6 chữ số
+const generateVerificationCode = (): string => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Gửi mã xác minh email
+const sendVerificationCode = async (req: any, res: any) => {
+    const { name, email, password, rule } = req.body;
+
+    try {
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: "Vui lòng điền đầy đủ thông tin." });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({ message: "Mật khẩu phải có ít nhất 6 ký tự." });
+        }
+
+        const existingUser = await UserModel.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+            return res.status(400).json({ message: "Email đã được đăng ký." });
+        }
+
+        await VerificationCodeModel.deleteMany({ email: email.toLowerCase() });
+
+        const code = generateVerificationCode();
+        const expiresAt = new Date(Date.now() + 60 * 1000); // 60 giây
+
+        const salt = await bcrypt.genSalt(10);
+        const hashPassword = await bcrypt.hash(password, salt);
+
+        const verificationDoc = new VerificationCodeModel({
+            email: email.toLowerCase(),
+            code,
+            name,
+            password: hashPassword,
+            rule: rule ?? 1,
+            expiresAt,
+        });
+        await verificationDoc.save();
+
+        await handleSendEmail({
+            from: "App Điểm Danh <namtdvp10a6@gmail.com>",
+            to: email,
+            subject: "Mã xác minh đăng ký tài khoản",
+            text: `Mã xác minh của bạn là: ${code}. Mã này có hiệu lực trong 60 giây.`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #4361ee; text-align: center;">APP ĐIỂM DANH - ĐĂNG KÝ TÀI KHOẢN</h2>
+                    <p>Xin chào <strong>${name}</strong>,</p>
+                    <p>Mã xác minh của bạn là:</p>
+                    <div style="background: #f0f4ff; padding: 20px; text-align: center; border-radius: 12px; margin: 20px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #4361ee;">${code}</span>
+                    </div>
+                    <p style="color: #e74c3c;">⏱️ Mã có hiệu lực trong 60 giây.</p>
+                </div>
+            `,
+        });
+
+        res.status(200).json({
+            message: "Mã xác minh đã được gửi đến email của bạn.",
+            data: { email: email.toLowerCase() }
+        });
+    } catch (error: any) {
+        console.error("Send verification error:", error);
+        res.status(500).json({ message: error.message || "Không thể gửi mã xác minh." });
+    }
+};
+
+// Xác minh mã và hoàn tất đăng ký
+const verifyCodeAndRegister = async (req: any, res: any) => {
+    const { email, code } = req.body;
+
+    try {
+        if (!email || !code) {
+            return res.status(400).json({ message: "Vui lòng nhập email và mã xác minh." });
+        }
+
+        const verificationDoc = await VerificationCodeModel.findOne({
+            email: email.toLowerCase(),
+            code,
+        });
+
+        if (!verificationDoc) {
+            return res.status(400).json({ message: "Mã xác minh không đúng hoặc đã hết hạn." });
+        }
+
+        if (new Date() > verificationDoc.expiresAt) {
+            await VerificationCodeModel.deleteOne({ _id: verificationDoc._id });
+            return res.status(400).json({ message: "Mã xác minh đã hết hạn. Vui lòng gửi lại mã mới." });
+        }
+
+        const existingUser = await UserModel.findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+            await VerificationCodeModel.deleteOne({ _id: verificationDoc._id });
+            return res.status(400).json({ message: "Email đã được đăng ký." });
+        }
+
+        const newUser: any = new UserModel({
+            name: verificationDoc.name,
+            email: verificationDoc.email,
+            password: verificationDoc.password,
+            rule: verificationDoc.rule,
+        });
+        await newUser.save();
+
+        await VerificationCodeModel.deleteOne({ _id: verificationDoc._id });
+
+        delete newUser._doc.password;
+
+        res.status(200).json({
+            message: "Đăng ký thành công!",
+            data: {
+                ...newUser._doc,
+                token: await getAccesstoken({
+                    _id: newUser._id,
+                    email: newUser.email,
+                    rule: newUser.rule,
+                }),
+            },
+        });
+    } catch (error: any) {
+        console.error("Verify code error:", error);
+        res.status(500).json({ message: error.message || "Xác minh thất bại." });
+    }
+};
 
 // Lấy thông tin profile hiện tại
 const getProfile = async (req: any, res: any) => {
@@ -253,4 +382,4 @@ const refreshToken = async (req: any, res: any) => {
     
 }
 
-export { register, login, loginWithGoogle, refreshToken, getProfile, updateProfile, changePassword }
+export { register, login, loginWithGoogle, refreshToken, getProfile, updateProfile, changePassword, sendVerificationCode, verifyCodeAndRegister }
