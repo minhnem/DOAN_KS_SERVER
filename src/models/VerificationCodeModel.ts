@@ -24,6 +24,11 @@ const VerificationCodeSchema = new Schema({
         type: Number,
         default: 1,
     },
+    // Mã sinh viên (chỉ dành cho sinh viên)
+    studentId: {
+        type: String,
+        default: null,
+    },
     expiresAt: {
         type: Date,
         required: true,

@@ -16,6 +16,12 @@ const UserSchema = new Schema({
         required: true
     },
 
+    // Mã sinh viên (chỉ dành cho sinh viên - rule = 1)
+    studentId: {
+        type: String,
+        default: null
+    },
+
     photoUrl: String,
 
     rule: {

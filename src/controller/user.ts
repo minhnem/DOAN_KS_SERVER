@@ -14,11 +14,16 @@ const generateVerificationCode = (): string => {
 
 // Gửi mã xác minh email
 const sendVerificationCode = async (req: any, res: any) => {
-    const { name, email, password, rule } = req.body;
+    const { name, email, password, rule, studentId } = req.body;
 
     try {
         if (!name || !email || !password) {
             return res.status(400).json({ message: "Vui lòng điền đầy đủ thông tin." });
+        }
+
+        // Sinh viên (rule = 1) phải có mã sinh viên
+        if ((!rule || rule === 1) && !studentId) {
+            return res.status(400).json({ message: "Vui lòng nhập mã sinh viên." });
         }
 
         if (password.length < 6) {
@@ -28,6 +33,14 @@ const sendVerificationCode = async (req: any, res: any) => {
         const existingUser = await UserModel.findOne({ email: email.toLowerCase() });
         if (existingUser) {
             return res.status(400).json({ message: "Email đã được đăng ký." });
+        }
+
+        // Kiểm tra mã sinh viên đã tồn tại chưa (chỉ với sinh viên)
+        if ((!rule || rule === 1) && studentId) {
+            const existingStudentId = await UserModel.findOne({ studentId: studentId.trim() });
+            if (existingStudentId) {
+                return res.status(400).json({ message: "Mã sinh viên đã được đăng ký." });
+            }
         }
 
         await VerificationCodeModel.deleteMany({ email: email.toLowerCase() });
@@ -44,6 +57,7 @@ const sendVerificationCode = async (req: any, res: any) => {
             name,
             password: hashPassword,
             rule: rule ?? 1,
+            studentId: studentId?.trim() || null,
             expiresAt,
         });
         await verificationDoc.save();
@@ -110,6 +124,7 @@ const verifyCodeAndRegister = async (req: any, res: any) => {
             email: verificationDoc.email,
             password: verificationDoc.password,
             rule: verificationDoc.rule,
+            studentId: (verificationDoc as any).studentId || null,
         });
         await newUser.save();
 
