@@ -13,6 +13,7 @@ import {
   updateSession,
   deleteSession,
   getSessionDetail,
+  getStudentSessionsWithAttendance,
 } from "../controller/attendance";
 
 const router = Router();
@@ -54,6 +55,9 @@ router.post("/check-in", verifyToken, checkInAttendance);
 
 // Lấy lịch sử điểm danh của sinh viên
 router.get("/history", verifyToken, getStudentAttendanceHistory);
+
+// Lấy danh sách buổi học với trạng thái điểm danh của sinh viên
+router.get("/student/class/:classId/sessions", verifyToken, getStudentSessionsWithAttendance);
 
 export default router;
 

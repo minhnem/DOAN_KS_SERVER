@@ -244,11 +244,11 @@ export const checkInAttendance = async (req: any, res: any) => {
       });
     }
 
-    // Xác định trạng thái: có mặt / trễ / ngoài vùng
-    let status: "present" | "late" | "outside_area" = "present";
+    // Xác định trạng thái: có mặt / trễ / vắng không phép (nếu ngoài vùng)
+    let status: "present" | "late" | "absent_unexcused" = "present";
 
     if (isOutsideArea) {
-      status = "outside_area";
+      status = "absent_unexcused"; // Ngoài vùng = Vắng không phép
     } else if (now > session.startTime) {
       status = "late";
     }
@@ -720,6 +720,61 @@ export const getSessionDetail = async (req: any, res: any) => {
   } catch (error: any) {
     return res.status(500).json({
       message: "Lỗi khi lấy thông tin buổi học.",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// 13. Lấy danh sách buổi học với trạng thái điểm danh của sinh viên
+// =====================================================
+export const getStudentSessionsWithAttendance = async (req: any, res: any) => {
+  try {
+    const { classId } = req.params;
+    const user = req.user;
+
+    if (!user || !user._id) {
+      return res.status(401).json({
+        message: "Không xác định được người dùng.",
+      });
+    }
+
+    // Lấy tất cả buổi học của lớp
+    const sessions = await SessionModel.find({ courseId: classId })
+      .sort({ startTime: -1 })
+      .lean();
+
+    // Lấy tất cả điểm danh của sinh viên trong các buổi học này
+    const sessionIds = sessions.map((s: any) => s._id);
+    const attendances = await AttendanceModel.find({
+      sessionId: { $in: sessionIds },
+      studentId: user._id,
+    }).lean();
+
+    // Kết hợp thông tin buổi học với trạng thái điểm danh
+    const sessionsWithAttendance = sessions.map((session: any) => {
+      const attendance = attendances.find(
+        (att: any) => att.sessionId.toString() === session._id.toString()
+      );
+
+      return {
+        _id: session._id,
+        title: session.title,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        status: session.status,
+        attendanceStatus: attendance?.status || null, // null = chưa điểm danh
+        checkInTime: attendance?.checkInTime || null,
+      };
+    });
+
+    return res.status(200).json({
+      message: "Lấy danh sách buổi học thành công.",
+      data: sessionsWithAttendance,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách buổi học.",
       error: error.message,
     });
   }
