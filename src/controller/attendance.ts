@@ -426,7 +426,14 @@ export const getClassAttendanceStats = async (req: any, res: any) => {
       const lateCount = studentAttendances.filter(
         (att: any) => att.status === "late"
       ).length;
-      const absentCount = totalSessions - studentAttendances.length;
+      const absentExcusedCount = studentAttendances.filter(
+        (att: any) => att.status === "absent_excused"
+      ).length;
+      const absentUnexcusedCount = studentAttendances.filter(
+        (att: any) => att.status === "absent_unexcused"
+      ).length;
+      // Số buổi chưa có bản ghi điểm danh
+      const notCheckedIn = totalSessions - studentAttendances.length;
 
       return {
         _id: student._id,
@@ -435,7 +442,9 @@ export const getClassAttendanceStats = async (req: any, res: any) => {
         totalSessions,
         presentCount,
         lateCount,
-        absentCount,
+        absentExcusedCount,
+        absentUnexcusedCount,
+        notCheckedIn,
         attendanceRate:
           totalSessions > 0
             ? Math.round(((presentCount + lateCount) / totalSessions) * 100)
@@ -542,9 +551,9 @@ export const manualCheckIn = async (req: any, res: any) => {
       });
     }
 
-    if (!["present", "late", "absent"].includes(status)) {
+    if (!["present", "late", "absent_excused", "absent_unexcused"].includes(status)) {
       return res.status(400).json({
-        message: "Trạng thái không hợp lệ. Chỉ chấp nhận: present, late, absent.",
+        message: "Trạng thái không hợp lệ. Chỉ chấp nhận: present, late, absent_excused, absent_unexcused.",
       });
     }
 
@@ -557,17 +566,6 @@ export const manualCheckIn = async (req: any, res: any) => {
 
     // Kiểm tra xem đã có bản ghi điểm danh chưa
     let attendance = await AttendanceModel.findOne({ sessionId, studentId });
-
-    if (status === "absent") {
-      // Nếu đánh vắng thì xóa bản ghi điểm danh (nếu có)
-      if (attendance) {
-        await AttendanceModel.deleteOne({ _id: attendance._id });
-      }
-      return res.status(200).json({
-        message: "Đã đánh vắng sinh viên.",
-        data: null,
-      });
-    }
 
     if (attendance) {
       // Cập nhật trạng thái
@@ -591,8 +589,15 @@ export const manualCheckIn = async (req: any, res: any) => {
       await attendance.save();
     }
 
+    const statusMessages: { [key: string]: string } = {
+      present: "có mặt",
+      late: "muộn",
+      absent_excused: "vắng có phép",
+      absent_unexcused: "vắng không phép",
+    };
+
     return res.status(200).json({
-      message: `Điểm danh ${status === "present" ? "có mặt" : "muộn"} thành công.`,
+      message: `Điểm danh ${statusMessages[status] || status} thành công.`,
       data: attendance,
     });
   } catch (error: any) {

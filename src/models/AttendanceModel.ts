@@ -20,10 +20,10 @@ const AttendanceSchema = new Schema({
     required: true,
   },
 
-  // Kết quả điểm danh: có mặt / trễ / ngoài vùng
+  // Kết quả điểm danh: có mặt / trễ / ngoài vùng / vắng có phép / vắng không phép
   status: {
     type: String,
-    enum: ["present", "late", "outside_area"],
+    enum: ["present", "late", "outside_area", "absent_excused", "absent_unexcused"],
     default: "present",
   },
 
