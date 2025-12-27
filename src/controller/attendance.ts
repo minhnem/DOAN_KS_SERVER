@@ -395,7 +395,7 @@ export const getClassAttendanceStats = async (req: any, res: any) => {
 
     // Lấy thông tin lớp và danh sách sinh viên
     const classData = await ClassModel.findById(classId)
-      .populate("students", "name email")
+      .populate("students", "name email studentId")
       .lean();
 
     if (!classData) {
@@ -439,6 +439,7 @@ export const getClassAttendanceStats = async (req: any, res: any) => {
         _id: student._id,
         name: student.name,
         email: student.email,
+        studentId: student.studentId,
         totalSessions,
         presentCount,
         lateCount,
@@ -488,7 +489,7 @@ export const getSessionAttendanceWithStudents = async (req: any, res: any) => {
 
     // Lấy thông tin lớp và danh sách sinh viên
     const classData = await ClassModel.findById(session.courseId)
-      .populate("students", "name email")
+      .populate("students", "name email studentId")
       .lean();
 
     if (!classData) {
@@ -510,6 +511,7 @@ export const getSessionAttendanceWithStudents = async (req: any, res: any) => {
         _id: student._id,
         name: student.name,
         email: student.email,
+        studentId: student.studentId,
         attendanceId: attendance?._id || null,
         status: attendance?.status || "absent", // absent = chưa điểm danh
         checkInTime: attendance?.checkInTime || null,
