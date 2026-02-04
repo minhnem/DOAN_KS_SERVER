@@ -223,12 +223,27 @@ export const checkInAttendance = async (req: any, res: any) => {
       radius: number;
     };
 
+    // Debug log
+    console.log("📍 Vị trí buổi học:", {
+      lat: sessionLocation.latitude,
+      lng: sessionLocation.longitude,
+      radius: sessionLocation.radius,
+    });
+    console.log("📍 Vị trí sinh viên:", {
+      lat: latitude,
+      lng: longitude,
+      accuracy: accuracy,
+    });
+
     const distance = calculateDistanceInMeters(
       sessionLocation.latitude,
       sessionLocation.longitude,
       latitude,
       longitude
     );
+    
+    console.log("📏 Khoảng cách tính được:", distance, "m");
+    
     const isOutsideArea = distance > sessionLocation.radius;
 
     // 4. Không cho điểm danh trùng (1 sinh viên / 1 buổi)
@@ -249,9 +264,11 @@ export const checkInAttendance = async (req: any, res: any) => {
 
     if (isOutsideArea) {
       status = "absent_unexcused"; // Ngoài vùng = Vắng không phép
-    } else if (now > session.startTime) {
+    } else if (now > session.attendanceWindowEnd) {
+      // Chỉ "late" nếu điểm danh SAU khung giờ cho phép
       status = "late";
     }
+    // Nếu trong khung giờ và trong vùng → "present"
 
     const attendance = new AttendanceModel({
       sessionId: session._id,
