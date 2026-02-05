@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import userRouter from "./src/router/user";
 import attendanceRouter from "./src/router/attendance";
 import classRouter from "./src/router/class";
+import deviceRouter from "./src/router/device";
 import cors from "cors";
 
 dotenv.config();
@@ -23,6 +24,9 @@ app.use("/attendance", attendanceRouter);
 
 // API quản lý lớp học
 app.use("/class", classRouter);
+
+// API quản lý thiết bị sinh viên
+app.use("/device", deviceRouter);
 
 const connectDB = async () => {
   try {

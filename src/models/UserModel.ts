@@ -29,6 +29,18 @@ const UserSchema = new Schema({
         default: 1
     },
 
+    // Device ID - chỉ dùng cho sinh viên để giới hạn thiết bị
+    deviceId: {
+        type: String,
+        default: null
+    },
+
+    // Trạng thái thiết bị đang chờ duyệt
+    pendingDeviceChange: {
+        type: Boolean,
+        default: false
+    },
+
     createdAt: {
         type: Date,
         default: Date.now()

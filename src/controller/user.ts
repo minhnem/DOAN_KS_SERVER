@@ -92,7 +92,7 @@ const sendVerificationCode = async (req: any, res: any) => {
 
 // Xác minh mã và hoàn tất đăng ký
 const verifyCodeAndRegister = async (req: any, res: any) => {
-    const { email, code } = req.body;
+    const { email, code, deviceId } = req.body;
 
     try {
         if (!email || !code) {
@@ -119,12 +119,16 @@ const verifyCodeAndRegister = async (req: any, res: any) => {
             return res.status(400).json({ message: "Email đã được đăng ký." });
         }
 
+        // Lưu deviceId cho sinh viên (rule = 1)
+        const isStudent = verificationDoc.rule === 1;
+
         const newUser: any = new UserModel({
             name: verificationDoc.name,
             email: verificationDoc.email,
             password: verificationDoc.password,
             rule: verificationDoc.rule,
             studentId: (verificationDoc as any).studentId || null,
+            deviceId: isStudent && deviceId ? deviceId : null,
         });
         await newUser.save();
 
@@ -289,7 +293,7 @@ const register = async (req: any, res: any) => {
 
 const login = async (req: any, res: any) => {
     const body = req.body
-    const {email} = body
+    const { email, deviceId } = body
     try {
         const user: any = await UserModel.findOne({email})
         if(!user) {
@@ -299,7 +303,40 @@ const login = async (req: any, res: any) => {
         const isMatchPassword = await bcrypt.compare(body.password, user.password)
 
         if(!isMatchPassword) {
-            throw new Error("Đăng nhập thất bại.")
+            throw new Error("Mật khẩu không đúng.")
+        }
+
+        // Kiểm tra thiết bị cho sinh viên (rule = 1)
+        if (user.rule === 1 && deviceId) {
+            // Nếu sinh viên chưa có deviceId (lần đầu đăng nhập) → lưu deviceId
+            if (!user.deviceId) {
+                user.deviceId = deviceId;
+                await user.save();
+            } 
+            // Nếu deviceId khác với thiết bị đã đăng ký
+            else if (user.deviceId !== deviceId) {
+                // Kiểm tra xem có đang chờ duyệt không
+                if (user.pendingDeviceChange) {
+                    return res.status(403).json({
+                        message: "Yêu cầu đổi thiết bị của bạn đang chờ giáo viên phê duyệt.",
+                        requireDeviceChange: true,
+                        pendingApproval: true,
+                        studentId: user._id,
+                    });
+                }
+                
+                // Yêu cầu đổi thiết bị
+                return res.status(403).json({
+                    message: "Tài khoản này đã được đăng ký trên thiết bị khác. Vui lòng gửi yêu cầu đổi thiết bị.",
+                    requireDeviceChange: true,
+                    pendingApproval: false,
+                    studentId: user._id,
+                    studentName: user.name,
+                    studentCode: user.studentId,
+                    oldDeviceId: user.deviceId,
+                    newDeviceId: deviceId,
+                });
+            }
         }
         
         delete user._doc.password
